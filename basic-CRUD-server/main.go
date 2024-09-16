@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"fmt"
 )
 
 type User struct {
@@ -84,10 +85,85 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(user)
 	// If the user exists, this line serializes the user struct into JSON and writes it to the response body (w)
+}
+
+func updateUser(w http.ResponseWriter, r *http.Request) {
+	idstr := r.URL.Query().Get("id")
+
+	id, err := strconv.Atoi(idstr)
+
+	if err != nil || id < 1 {
+		http.Error(w, "Invalid userID", http.StatusNotFound)
+		return
+	}
+
+	var user User
+
+	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	_, exists := users[id]
+
+	if !exists {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	user.ID = id
+	users[id] = user
+
+	json.NewEncoder(w).Encode(user)
+
+}
+
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+	idstr := r.URL.Query().Get("id")
+
+	id, err := strconv.Atoi(idstr)
+
+	if err != nil || id < 1 {
+		http.Error(w, "Invalid user id", http.StatusNotFound)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	_, exists := users[id]
+
+	if !exists {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	delete(users, id)
+
+	w.WriteHeader(http.StatusNoContent) // 204 No Content
 
 }
 
 func main() {
-	createUser()
-	getUser()
+	http.HandleFunc("/users", func(w http.ResponseWriter,r *http.Request){
+		switch r.Method{
+		case "POST":
+			createUser(w,r)
+		case "GET":
+			getUser(w,r)
+		case "PUT":
+			updateUser(w,r)
+		case "DELETE":
+			deleteUser(w,r)
+		default :
+			http.Error(w,"Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	fmt.Println("Server starting on port :8080...")
+
+	http.ListenAndServe(":8080",nil)
+
 }
