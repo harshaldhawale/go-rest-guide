@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
@@ -52,9 +53,41 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func getUser(w http.ResponseWriter, r *http.Request) {
+	idstr := r.URL.Query().Get("id")
+	// fetches the value of the id parameter from the query string.
+
+	id, err := strconv.Atoi(idstr)
+
+	if err != nil || id < 1 {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	/*
+		If the conversion fails (e.g., if the id isn't a valid number), or if the id is less than 1,
+		the function returns a 400 Bad Request status with the message "Invalid user ID."
+		This prevents invalid or missing user IDs from being processed
+	*/
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	user, exists := users[id]
+	// The second return value (exists) is a boolean indicating whether the user with the given ID exists in the map.
+
+	if !exists {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+	// If the user doesn't exist, the function returns a 404 Not Found status with the message "User not found."
+	// This handles cases where the user ID is valid but not present in the database
+
+	json.NewEncoder(w).Encode(user)
+	// If the user exists, this line serializes the user struct into JSON and writes it to the response body (w)
 
 }
 
 func main() {
-
+	createUser()
+	getUser()
 }
